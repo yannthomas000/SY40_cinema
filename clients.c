@@ -7,6 +7,8 @@
 #include <stdbool.h>
 #include <sys/wait.h>
 #include <string.h>
+#include <fcntl.h>
+#include <sys/file.h>
 
 #define NUM_CLIENTS 5
 
@@ -171,18 +173,23 @@ void gestionnaire_signal(int sig, siginfo_t *info, void *context) {
     }
 }
 
-// Réinitialisation du client après la fin du film
 void reset_client(Client *client) {
-    client->film_id = rand() % 3;
+    client->film_id = rand() % 3; // Assurez-vous que cela correspond aux films existants
     client->age = rand() % 100;
     strcpy(client->status, "libre");
+
+    if (client->film_id < 0 || client->film_id >= 3) {
+        log_action("Erreur : ID de film invalide après réinitialisation.\n");
+        reset_client(client);
+    }
 }
 
-// Fonction pour enregistrer les actions dans un fichier de log
 void log_action(const char *message) {
     FILE *log_file = fopen("log.txt", "a");
     if (log_file != NULL) {
+        flock(fileno(log_file), LOCK_EX); // Verrouillez le fichier
         fprintf(log_file, "%s", message);
+        flock(fileno(log_file), LOCK_UN); // Déverrouillez le fichier
         fclose(log_file);
     } else {
         perror("Erreur lors de l'ouverture du fichier de log");
