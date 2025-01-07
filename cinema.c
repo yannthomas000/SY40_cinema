@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <sys/wait.h>
+#include <sys/file.h>
 
 struct message {
     long message_type;
@@ -36,14 +37,15 @@ void envoyer_signal_avec_cle(pid_t client_pid, int cle_salle, int type_evenement
 void salle_process(Salle salle);
 void log_action(const char *message);
 void reset_salle(Salle *salle);
+void delete_salle(Salle *salle);
 
 int main() {
     // Création de salles
     Salle salles[4];
-    salles[0] = create_salle(1, 100, 101, 18);
-    salles[1] = create_salle(2, 150, 102, 12);
-    salles[2] = create_salle(3, 200, 103, 8);
-    salles[3] = create_salle(4, 250, 104, 18);
+    salles[0] = create_salle(1, 20, 1, 18);
+    salles[1] = create_salle(2, 20, 2, 12);
+    salles[2] = create_salle(3, 20 3, 8);
+    salles[3] = create_salle(4, 20, 4, 18);
 
     // Forking processes for each salle
     for (int i = 0; i < 4; i++) {
@@ -63,6 +65,10 @@ int main() {
         wait(NULL);
     }
 
+    // Delete salles
+    for (int i = 0; i < 4; i++) {
+        delete_salle(&salles[i]);
+    }
     return 0;
 }
 
@@ -74,29 +80,37 @@ void recevoir_message(Salle salles[]) {
     struct message msg;
 
     msgid = msgget(key1, flag);
+    if (msgid < 0) {
+        perror("Erreur lors de la création de la file de messages");
+        exit(1);
+    }
 
-    msgrcv(msgid, &msg, sizeof(msg), 2, MSG_NOERROR);
+    while (true) {
 
-    char log_msg[100];
-    //recherche dans les salles disponibles celle ou le film est projete
-    for (int i = 0; i < 4; i++) {
-        if (msg.film_id == salles[i].film_id) {
-            // Si la salle a des places libres
-            if (msg.age < salles[i].age_limite) {
-                snprintf(log_msg, sizeof(log_msg), "Le client %d est trop jeune pour le film\n", msg.pid);
-                log_action(log_msg);
-                envoyer_confirmation_reservation(msg.pid, salles[i].salle_id, AGE_LIMITE);
-            } else if (salles[i].nb_places_libres > 0) {
-                // Réserver une place
-                salles[i].nb_places_libres--;
-                salles[i].client_pid[salles[i].nb_places_libres] = msg.pid;
-                snprintf(log_msg, sizeof(log_msg), "Client %d a réservé une place dans la salle %d\n", msg.pid, salles[i].salle_id);
-                log_action(log_msg);
-                envoyer_confirmation_reservation(msg.pid, salles[i].salle_id, RESERVATION_OK);
-            } else {
-                snprintf(log_msg, sizeof(log_msg), "La salle %d est pleine\n", salles[i].salle_id);
-                log_action(log_msg);
-                envoyer_confirmation_reservation(msg.pid, salles[i].salle_id, SALLE_PLEINE);
+        if (msgrcv(msgid, &msg, sizeof(msg) - sizeof(long), 2, MSG_NOERROR) < 0) {
+            perror("Erreur lors de la réception du message");
+            continue; // Continue to the next message
+        }
+
+        char log_msg[100];
+        for (int i = 0; i < 4; i++) {
+            if (msg.film_id == salles[i].film_id) {
+                if (msg.age < salles[i].age_limite) {
+                    snprintf(log_msg, sizeof(log_msg), "Le client %d est trop jeune pour le film\n", msg.pid);
+                    log_action(log_msg);
+                    envoyer_confirmation_reservation(msg.pid, salles[i].salle_id, AGE_LIMITE);
+                } else if (salles[i].nb_places_libres > 0) {
+                    salles[i].nb_places_libres--;
+                    salles[i].client_pid[salles[i].nb_places_libres] = msg.pid;
+                    snprintf(log_msg, sizeof(log_msg), "Client %d a réservé une place dans la salle %d\n", msg.pid, salles[i].salle_id);
+                    log_action(log_msg);
+                    envoyer_confirmation_reservation(msg.pid, salles[i].salle_id, RESERVATION_OK);
+                } else {
+                    snprintf(log_msg, sizeof(log_msg), "La salle %d est pleine\n", salles[i].salle_id);
+                    log_action(log_msg);
+                    envoyer_confirmation_reservation(msg.pid, salles[i].salle_id, SALLE_PLEINE);
+                }
+                break; // Found the correct salle, exit the loop
             }
         }
     }
@@ -164,6 +178,7 @@ void salle_process(Salle salle) {
         // Réinitialiser la salle
         reset_salle(&salle);
     }
+    free(salle.client_pid);
 }
 
 // Fonction pour réinitialiser une salle
@@ -177,13 +192,21 @@ void reset_salle(Salle *salle) {
     log_action(log_msg);
 }
 
-// Fonction pour enregistrer les actions dans un fichier de log
 void log_action(const char *message) {
     FILE *log_file = fopen("log.txt", "a");
     if (log_file != NULL) {
+        flock(fileno(log_file), LOCK_EX); // Verrouillez le fichier
         fprintf(log_file, "%s", message);
+        flock(fileno(log_file), LOCK_UN); // Déverrouillez le fichier
         fclose(log_file);
     } else {
         perror("Erreur lors de l'ouverture du fichier de log");
+    }
+}
+//Fonction pour supprimer une salle
+void delete_salle(Salle *salle) {
+    if (salle->client_pid != NULL) {
+        free(salle->client_pid);
+        salle->client_pid = NULL; // Assurez-vous que le pointeur ne pointe plus sur une zone mémoire libérée
     }
 }
