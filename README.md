@@ -83,3 +83,5 @@ décision.
 alerte doit être déclenchée pour limiter l'accès et ne plus accepter de réservations ou
 d'achats de billets pour cette séance.
 •
+![image](https://github.com/user-attachments/assets/eb076b52-9cad-4d05-b142-ed25fbbafa63)
+
