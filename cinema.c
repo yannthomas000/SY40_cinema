@@ -33,6 +33,11 @@ typedef enum {
     AGE_LIMITE
 } ReservationStatus;
 
+// Création de salles
+Salle salles[4];
+
+volatile sig_atomic_t cleanup_done = 0;
+
 // Prototypes des fonctions
 Salle create_salle(int salle_id, int nb_places, int film_id, int age_limite);
 void recevoir_message(Salle salle[]);
@@ -42,10 +47,15 @@ void salle_process(Salle salle);
 void log_action(const char *message);
 void reset_salle(Salle *salle);
 void delete_salle(Salle *salle);
+void handle_sigint(int sig);
 
 int main() {
-    // Création de salles
-    Salle salles[4];
+    struct sigaction sa;
+    sa.sa_handler = handle_sigint;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGINT, &sa, NULL);
+
     salles[0] = create_salle(1, 20, 1, 18);
     salles[1] = create_salle(2, 20, 2, 12);
     salles[2] = create_salle(3, 20, 3, 8);
@@ -239,4 +249,22 @@ void log_action(const char *message) {
     } else {
         perror("Erreur lors de l'ouverture du fichier de log");
     }
+}
+
+// Gestionnaire de signal pour SIGINT
+void handle_sigint(int sig) {
+    if (cleanup_done) {
+        return;
+    }
+    cleanup_done = 1;
+
+    printf("Signal SIGINT reçu, arrêt du programme...\n");
+
+    // Libérer la mémoire allouée pour les salles
+    for (int i = 0; i < 4; i++) {
+        delete_salle(&salles[i]);
+    }
+
+    // Terminer le programme
+    exit(0);
 }
