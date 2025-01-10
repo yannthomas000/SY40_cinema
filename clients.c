@@ -12,7 +12,7 @@
 #include <sys/shm.h>
 #include <sys/sem.h>
 
-#define NUM_CLIENTS 5
+#define NUM_CLIENTS 3
 #define SHM_KEY 1234
 #define SEM_KEY 5678
 
@@ -37,14 +37,17 @@ typedef struct {
     Client clients[NUM_CLIENTS];
 } SharedData;
 
+volatile sig_atomic_t cleanup_done = 0;
+
 // Prototypes des fonctions
-Client create_client(int id, int priority, int age);
+Client create_client(int id, int age);
 bool reserver_film(Client *client);
 void gestionnaire_signal(int sig, siginfo_t *info, void *context);
 void reset_client(Client *client);
 void log_action(const char *message);
 void client_process(Client client);
 void delete_message_queue(int msgid);
+void handle_sigint(int sig);
 
 void init_shared_memory(SharedData **shared_data, int *shmid);
 void attach_shared_memory(int shmid, SharedData **shared_data);
@@ -56,6 +59,12 @@ void signal_semaphore(int semid);
 void remove_semaphore(int semid);
 
 int main(void) {
+    struct sigaction sa;
+    sa.sa_handler = handle_sigint;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGINT, &sa, NULL);
+
     pid_t pids[NUM_CLIENTS];
     int i;
 
@@ -66,7 +75,6 @@ int main(void) {
     init_semaphore(&semid);
 
     // Enregistrement du gestionnaire de signal
-    struct sigaction sa;
     sa.sa_flags = SA_SIGINFO;
     sa.sa_sigaction = gestionnaire_signal;
     sigemptyset(&sa.sa_mask);
@@ -83,8 +91,7 @@ int main(void) {
             time_t t = time(NULL); // Obtenir le temps actuel
             srand(t + getpid()); // Utiliser le temps actuel et le PID comme graine pour rand()
             wait_semaphore(semid);
-            Client client = create_client(getpid(), rand() % 10, rand() % 100);
-            printf("Création du client %d et âge %d\n", client.id, client.age);
+            Client client = create_client(getpid(), rand() % 100);
             shared_data->clients[i] = client;
             signal_semaphore(semid);
             client_process(client);
@@ -114,12 +121,13 @@ int main(void) {
 }
 
 // Fonction pour la création d'un nouveau client
-Client create_client(int id, int priority, int age) {
+Client create_client(int id, int age) {
     Client client;
     client.id = id;
     client.age = age;
     strcpy(client.status, "libre");
     client.film_id = -1;
+    printf("Client %d créé avec priorité %d et âge %d\n", id, age);
     return client;
 }
 
@@ -319,6 +327,37 @@ void log_action(const char *message) {
     } else {
         perror("Erreur lors de l'ouverture du fichier de log");
     }
+}
+
+// Function to handle SIGINT
+void handle_sigint(int sig) {
+    if (cleanup_done) {
+        return;
+    }
+    cleanup_done = 1;
+
+    printf("Signal SIGINT reçu, arrêt du programme...\n");
+
+    // Suppression de la mémoire partagée
+    int shmid = shmget(SHM_KEY, sizeof(SharedData), 0666);
+    if (shmid >= 0) {
+        remove_shared_memory(shmid);
+    }
+
+    // Suppression du sémaphore
+    int semid = semget(SEM_KEY, 1, 0666);
+    if (semid >= 0) {
+        remove_semaphore(semid);
+    }
+
+    // Suppression de la file de messages
+    key_t key1 = 17;
+    int msgid = msgget(key1, 0666);
+    if (msgid >= 0) {
+        delete_message_queue(msgid);
+    }
+
+    exit(0);
 }
 
 // Function to initialize shared memory
