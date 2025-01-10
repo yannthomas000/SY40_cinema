@@ -84,6 +84,7 @@ alerte doit être déclenchée pour limiter l'accès et ne plus accepter de rés
 d'achats de billets pour cette séance.
 •
 ![image](https://github.com/user-attachments/assets/4ea7216b-1feb-4761-b212-2080cbc3b80d)
-![image](https://github.com/user-attachments/assets/f6f105bf-171a-43c7-9e7e-8f176b1088c4)
+![image](https://github.com/user-attachments/assets/8459758f-aaf9-4699-ae9e-23b4b7827e23)
+
 
 
