@@ -185,7 +185,7 @@ bool reserver_film(Client *client) {
 
     // Préparation du message
     msg.message_type = 2;
-    msg.pid = getpid();
+    msg.pid = client->id;
     msg.film_id = rand() % 3;
     msg.age = client->age;
 
