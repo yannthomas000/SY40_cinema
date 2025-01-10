@@ -189,8 +189,8 @@ void envoyer_signal_avec_cle(pid_t client_pid, int cle_salle, int type_evenement
 // Processus de chaque salle
 void salle_process(Salle salle) {
     while (1) {
-        printf("Attendre 10 secondes pour la prochaine projection dans la salle %d\n", salle.salle_id);
-        sleep(30); // Attendre 3 minutes
+        printf("Attendre 30 secondes pour la prochaine projection dans la salle %d\n", salle.salle_id);
+        sleep(30);
 
         // Envoyer signal de début de projection
         for (int i = 0; i < salle.nb_places - salle.nb_places_libres; i++) {
